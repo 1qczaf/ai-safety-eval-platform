@@ -44,4 +44,8 @@ export ANTHROPIC_API_KEY="your-api-key"
 python demo.py
 ```
 
-This project demonstrates systematic V&V methodologies applied to AI safety - leveraging automotive testing experience for safety-critical AI evaluation.
+This project demonstrates systematic V&V methodologies applied to AI safety - leveraging automotive testing experience for safety-critical AI evaluation.# Test trigger for GitHub Actions
+
+This change will trigger all workflows to run and demonstrate the CI/CD pipeline.
+
+Sun Jul 27 17:54:28 CDT 2025
