@@ -1,0 +1,184 @@
+name: Code Quality & Linting
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort flake8 mypy pylint
+        pip install -r requirements.txt
+        
+    - name: Run Black formatter check
+      run: |
+        echo "🎨 Checking code formatting with Black..."
+        black --check --diff src/ || exit 1
+        
+    - name: Run isort import sorting check
+      run: |
+        echo "📦 Checking import sorting with isort..."
+        isort --check-only --diff src/ || exit 1
+        
+    - name: Run Flake8 linting
+      run: |
+        echo "🔍 Running Flake8 linting..."
+        flake8 src/ --max-line-length=88 --extend-ignore=E203,W503 || exit 1
+        
+    - name: Run MyPy type checking
+      run: |
+        echo "🔬 Running MyPy type checking..."
+        mypy src/ --ignore-missing-imports || exit 1
+        
+    - name: Run Pylint analysis
+      run: |
+        echo "🔎 Running Pylint analysis..."
+        pylint src/ --disable=C0114,C0115,C0116 --fail-under=8.0 || exit 1
+        
+  ai-code-review:
+    name: AI-Specific Code Review
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: AI Safety Code Pattern Analysis
+      run: |
+        echo "🤖 Analyzing AI safety code patterns..."
+        python -c "
+        import os
+        import re
+        
+        def check_ai_safety_patterns():
+            issues = []
+            
+            for root, dirs, files in os.walk('src/'):
+                for file in files:
+                    if file.endswith('.py'):
+                        filepath = os.path.join(root, file)
+                        with open(filepath, 'r') as f:
+                            content = f.read()
+                            
+                            # Check for proper error handling in API calls
+                            if 'anthropic' in content and 'try:' not in content:
+                                issues.append(f'{filepath}: Missing error handling for API calls')
+                            
+                            # Check for input validation in evaluators
+                            if 'evaluate' in content and 'if not' not in content:
+                                issues.append(f'{filepath}: Missing input validation in evaluation functions')
+                            
+                            # Check for logging in safety-critical functions
+                            if 'def ' in content and ('safety' in file or 'constitutional' in file):
+                                if 'logging' not in content and 'print' not in content:
+                                    issues.append(f'{filepath}: Missing logging in safety-critical code')
+        
+            if issues:
+                print('⚠️ AI Safety Code Issues Found:')
+                for issue in issues:
+                    print(f'  - {issue}')
+                return False
+            else:
+                print('✅ All AI safety code patterns look good!')
+                return True
+        
+        success = check_ai_safety_patterns()
+        exit(0 if success else 1)
+        "
+        
+  documentation-check:
+    name: Documentation Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check README and documentation
+      run: |
+        echo "📚 Checking documentation quality..."
+        
+        # Check if README exists and has minimum content
+        if [ ! -f "README.md" ]; then
+          echo "❌ README.md is missing"
+          exit 1
+        fi
+        
+        # Check README length (should be substantial)
+        readme_lines=$(wc -l < README.md)
+        if [ $readme_lines -lt 20 ]; then
+          echo "❌ README.md is too short (less than 20 lines)"
+          exit 1
+        fi
+        
+        # Check for key sections in README
+        if ! grep -q "Installation\|Setup\|Usage\|Example" README.md; then
+          echo "❌ README.md missing key sections (Installation/Setup/Usage/Example)"
+          exit 1
+        fi
+        
+        echo "✅ Documentation quality checks passed!"
+        
+    - name: Check for CLAUDE.md configuration
+      run: |
+        echo "🤖 Checking for Claude Code configuration..."
+        if [ ! -f "CLAUDE.md" ]; then
+          echo "📝 Creating CLAUDE.md for Claude Code integration..."
+          cat > CLAUDE.md << 'EOF'
+# AI Safety Evaluation Platform - Claude Code Configuration
+
+## Project Overview
+This is an AI safety evaluation platform designed for testing and evaluating large language models.
+
+## Key Commands
+- Run safety tests: `python -m pytest tests/`
+- Run red team evaluation: `python src/red_team/adversarial_prompts.py`
+- Run constitutional AI: `python src/constitutional/constitutional_ai.py`
+- Full demo: `python full_demo.py`
+
+## Testing Guidelines
+- Always run safety evaluations before merging
+- Ensure ANTHROPIC_API_KEY is set in environment
+- All new evaluators must include comprehensive error handling
+- Red team tests should cover adversarial scenarios
+
+## Code Standards
+- Use environment variables for API keys
+- Include logging in safety-critical functions
+- Add input validation to all evaluation functions
+- Follow defensive programming practices
+EOF
+        else
+          echo "✅ CLAUDE.md already exists"
+        fi

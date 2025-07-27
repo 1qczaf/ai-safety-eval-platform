@@ -1,0 +1,132 @@
+name: Security & Vulnerability Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scans weekly on Sundays at 3 AM UTC
+    - cron: '0 3 * * 0'
+
+jobs:
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for comprehensive scanning
+        
+    - name: Run TruffleHog OSS
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+        
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety bandit
+        pip install -r requirements.txt
+        
+    - name: Run Safety check for known vulnerabilities
+      run: |
+        echo "🔍 Scanning for known vulnerabilities in dependencies..."
+        safety check --json --output safety-report.json || true
+        
+    - name: Run Bandit security linter
+      run: |
+        echo "🔒 Running Bandit security analysis..."
+        bandit -r src/ -f json -o bandit-report.json || true
+        
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: |
+          safety-report.json
+          bandit-report.json
+        retention-days: 30
+        
+  ai-model-security:
+    name: AI Model Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Analyze AI Model Configurations
+      run: |
+        echo "🤖 Analyzing AI model security configurations..."
+        python -c "
+        import os
+        import json
+        
+        # Check for hardcoded API keys or sensitive data
+        security_issues = []
+        
+        for root, dirs, files in os.walk('src/'):
+            for file in files:
+                if file.endswith('.py'):
+                    filepath = os.path.join(root, file)
+                    with open(filepath, 'r') as f:
+                        content = f.read()
+                        if 'sk-' in content and 'api' in content.lower():
+                            security_issues.append(f'Potential API key in {filepath}')
+                        if 'password' in content.lower() and '=' in content:
+                            security_issues.append(f'Potential hardcoded password in {filepath}')
+        
+        report = {
+            'timestamp': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
+            'security_issues': security_issues,
+            'status': 'completed'
+        }
+        
+        with open('ai-security-report.json', 'w') as f:
+            json.dump(report, f, indent=2)
+            
+        if security_issues:
+            print('❌ Security issues found:')
+            for issue in security_issues:
+                print(f'  - {issue}')
+            exit(1)
+        else:
+            print('✅ No security issues detected')
+        "
+        
+    - name: Upload AI Security Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: ai-security-report
+        path: ai-security-report.json
+        retention-days: 30
